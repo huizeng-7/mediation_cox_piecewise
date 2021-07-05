@@ -20,8 +20,8 @@ library(ggplot2)
 
 
 
-one_mediator_bootstrap=function(bootstrap_data,num,cov=c(rep(1,ncol(bootstrap_data)-4)),seed){
-
+one_mediator_bootstrap=function(bootstrap_data,num,cov=c(rep(1,ncol(bootstrap_data)-4)),seed=1){
+set.seed(seed)
   cox_est=function( data, indices){
 
     dat1=data[indices,]
