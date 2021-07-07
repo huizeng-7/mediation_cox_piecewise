@@ -1,7 +1,7 @@
 
 
 ###########
-library(gdata)
+
 library(datasets)
 library(nlme)
 library(TSA)
@@ -15,15 +15,30 @@ library(ggplot2)
 
 
 ##################################################
-###make sure the data frame is followed by this order:
+###make sure the data frame just contain the following variables and it is followed by this order:
 ## exposure, mediator,covariates, time, event.###########
 
+##create the big function###
+##bootstrap data: The original data that will be used to estimate the natural indirect and direct effects. It also
+##                will be used in the bootstrap to have the confidence interval.
+##n_piece: the number of the time pieces
+##num: how many times to run in the bootstrap to create the confidence interval.
+##seed: for the bootstrap. Default is 1.
+##cov: The baseline covariates you want to specify when it calculates the natural indirect and direct effects,
+##     The default is a vector of 1.
 
 
 one_mediator_bootstrap_p=function(bootstrap_data,n_piece,num,seed=1,cov=c(rep(1,ncol(bootstrap_data)-4))){
 
+  ##create seed for the bootstrap for confidence interval#########
   set.seed(seed)
 
+  ###create the function to
+
+  ##1:estimate the parameters of piecewise constant baseline hazard model
+  ##2 calculate baseline hazard and cumulative baseline hazard
+
+  ###in bootstrap######
   piecewise_est=function( data, indices){
 
     dat1=data[indices,]
@@ -119,36 +134,17 @@ one_mediator_bootstrap_p=function(bootstrap_data,n_piece,num,seed=1,cov=c(rep(1,
     }
 
 
-    #  res1 <- optim(c(0,0,0,rep(0,(ncol(bootstrap_data)-4)),0,0,rep(0,(ncol(bootstrap_data)-4)),1,rep(1,n_piece)), l_piecewise, dat4=dat4, method = "BFGS", control=list(reltol=1e-8,maxit=300))
-    #
-    # AIC=2*(res1$value)+2*length(res1$par)
-    # para=data.matrix(res1$par)
 
-    # res1 <- optim(c(0,0,0,rep(0,(ncol(dat)-4)),0,0,rep(0,(ncol(dat)-4)),1,rep(1,n_piece)), l_piecewise, dat4=dat4, method = "BFGS", control=list(reltol=1e-8,maxit=300))
     res1=nlm(l_piecewise,c(0,0,0,rep(0,(ncol(bootstrap_data)-4)),0,0,rep(0,(ncol(dat1)-4)),1,rep(1,n_piece)),dat4=dat4,hessian = FALSE)
 
-    #  AIC=2*(res1$value)+2*length(res1$par)
+
     AIC=2*res1$minimum+2*length(res1$estimate)
 
-    #para=data.matrix(res1$par)
+
     para=data.matrix(res1$estimate)
     ##################################################################################
 
 
-    # baseline_hazard=dat4[,((2*n_piece+ncol(dat1)):(3*n_piece-1+ncol(dat1)))]%*%para[(2*ncol(dat1)-1):(2*ncol(dat1)-2+ncol(group))]
-    # base_cum_hazard=dat4[,((ncol(dat1)+1):(ncol(dat1)+n_piece-1))]%*%para[(2*ncol(dat1)-1):(2*ncol(dat1)-3+n_piece)]
-    # +(dat4[,((ncol(dat1)+n_piece):(ncol(dat1)-1+2*n_piece))])%*%para[(2*ncol(dat1)-1):(2*ncol(dat1)-2+n_piece)]
-    #
-    # para=t(para)
-    # para=para[rep(seq_len(nrow(para)), nrow(dat4)),]
-    # AIC=rep(AIC,nrow(dat4))
-    #
-    #
-    # dat2=cbind(dat4[,((ncol(dat1)-1):ncol(dat1))],para,baseline_hazard,base_cum_hazard,AIC)
-    # dat2=data.matrix(dat2)
-    #
-    #  return(dat2)
-    ####################################################################
 
     timeset=seq(1,quantile(bootstrap_data[,(ncol(bootstrap_data)-1)],probs=1,type = 3), by=1)
     percentile_event4=percentile_event4[1:length(timeset),]
@@ -196,8 +192,8 @@ one_mediator_bootstrap_p=function(bootstrap_data,n_piece,num,seed=1,cov=c(rep(1,
 
 
   }
-
-
+####end of create the function for bootstrap######
+#####run the bootstrap and organize the results. Prepare for the integration####
   results = boot(data=bootstrap_data, statistic=piecewise_est,R=num)
   results_t=results$t
   results_t0=results$t0
@@ -212,7 +208,7 @@ one_mediator_bootstrap_p=function(bootstrap_data,n_piece,num,seed=1,cov=c(rep(1,
   restructure_t=matrix(un_t,nrow=(2*ncol(bootstrap_data)+2+n_piece),byrow=T)
 
   restructure_t=t(restructure_t)
-
+###end of preparation ###
   ##############VanderWeele estimate###############
 
   indirect_vander_t0=exp((results_t0[,3]* results_t0[,(ncol(bootstrap_data)+2)]
@@ -241,7 +237,7 @@ one_mediator_bootstrap_p=function(bootstrap_data,n_piece,num,seed=1,cov=c(rep(1,
 
   #############
 
-
+###create the function for integration######
 
   fun=function(dd){
 
@@ -366,18 +362,21 @@ one_mediator_bootstrap_p=function(bootstrap_data,n_piece,num,seed=1,cov=c(rep(1,
   effects_for_t=t(effects_for_t)
   rownames(effects_for_t)<-NULL
 
-
-  #effects_for_all=cbind(results_t0[ncol(bootstrap_data)-1],effects_for_all)
+  ###effects_for_t0###is the results for original dataset####
   effects_for_t0=cbind(results_t0[,1],effects_for_t0,indirect_vander_t0,direct_vander_t0)
   colnames(effects_for_t0) <- c("event_time", "indirect_t0", "direct_t0", "indirect_vander_t0", "direct_vander_t0")
 
+  ###effects_for_t is the results for bootstrap dataset######
   effects_for_t=cbind(restructure_t[,1],effects_for_t,indirect_vander_t,direct_vander_t)
   colnames(effects_for_t) <- c("event_time", "indirect_t", "direct_t", "indirect_vander_t", "direct_vander_t")
 
-
   effects_for_t0=data.frame(effects_for_t0)
+
   effects_for_t=data.frame(effects_for_t)
 
+
+  #####plot the results from bootstrap. It contains the mean of estimates of natural indirect and direct effects,and confidence intervals
+  ###compared with VanderWeele's method###
   effects_for_t_cl=effects_for_t %>%
     group_by(event_time) %>%
     summarise(indirect_t_2.5 = quantile(indirect_t, probs = 0.025),
@@ -450,14 +449,18 @@ one_mediator_bootstrap_p=function(bootstrap_data,n_piece,num,seed=1,cov=c(rep(1,
 
 }
 
+####The end of the big function####
+###the result is a list contain:
 
-bootstrap_results=one_mediator_bootstrap_p(mediation_hui1,n_piece=6,num=500,seed=1,cov=c(rep(1,ncol(mediation_hui1)-4)))
+#1. The estimate of natural indirect and direct effects from original dataset
+#from 1 to the last event time.
+#2. The plot of natural indirect with mean and confidence interval from our approach
+#compared with VanderWeele' estimate
+#3.The plot of natural direct with mean and confidence interval from our approach
+#compared with VanderWeele' estimate
 
-end_time <- Sys.time()
 
-bbbb=end_time - start_time
-bbbb
+##run the big function with the example data to get the results##
+bootstrap_results=one_mediator_bootstrap_p(example_data,n_piece=6,num=500,seed=1,cov=c(rep(1,ncol(bootstrap_data)-4)))
 
-# results_t
-#
-# results_t0
+
