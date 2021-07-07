@@ -15,13 +15,30 @@ library(ggplot2)
 
 
 ##################################################
-###make sure the data frame is followed by this order:
+###make sure the data frame just contain the following variables and it is followed by this order:
 ## exposure, mediator,covariates, time, event.###########
 
 
+##create the big function###
+##bootstrap data: The original data that will be used to estimate the natural indirect and direct effects. It also
+##                will be used in the bootstrap to have the confidence interval.
+
+##num: how many times to run in the bootstrap to create the confidence interval.
+##seed: for the bootstrap. Default is 1.
+##cov: The baseline covariates you want to specify when it calculates the natural indirect and direct effects,
+##     The default is a vector of 1.
+
 
 one_mediator_bootstrap=function(bootstrap_data,num,cov=c(rep(1,ncol(bootstrap_data)-4)),seed=1){
-set.seed(seed)
+
+  set.seed(seed)
+
+
+  ###create the function to
+
+  ##1:estimate the parameters of Cox model
+  ##2 calculate baseline hazard and cumulative baseline hazard for each event time points
+  ###in bootstrap######
   cox_est=function( data, indices){
 
     dat1=data[indices,]
@@ -112,14 +129,14 @@ set.seed(seed)
                ,cum_hazard=cumsum(dat4[,"hazard"]),
                t(replicate(nrow(dat4), h44_est)))
 
-    # haz_cu=cbind(dat4[(ncol(dat4)-7:ncol(dat4)-5)],dat4[(ncol(dat4)-2:ncol(dat4))],dat4[,"hazard"],dat4[,"cum_hazard"])
 
     return(dat4)
 
 
 
   }
-
+  ####end of create the function for bootstrap######
+  #####run the bootstrap and organize the results. Prepare for the integration####
   results = boot(bootstrap_data, statistic=cox_est,R=num)
   results_t=results$t
   results_t0=results$t0
@@ -135,7 +152,7 @@ set.seed(seed)
 
   restructure_t=t(restructure_t)
   restructure_t=restructure_t[restructure_t[,ncol(bootstrap_data)+1] != 0,]
-
+  ###end of preparation ###
   ##############VanderWeele estimate###############
   indirect_vander_t0=exp((results_t0[,(ncol(bootstrap_data)+4)]* results_t0[,(2*ncol(bootstrap_data)+3)]
                           + results_t0[,(ncol(bootstrap_data)+5)]* results_t0[,(2*ncol(bootstrap_data)+3)]*1)*(1-0))
@@ -166,6 +183,8 @@ set.seed(seed)
   #############
 
 
+
+  ###create the function for integration######
 
   fun=function(dd){
 
@@ -287,17 +306,21 @@ set.seed(seed)
   effects_for_t=t(effects_for_t)
   rownames(effects_for_t)<-NULL
 
-
-  #effects_for_all=cbind(results_t0[ncol(bootstrap_data)-1],effects_for_all)
+  ###effects_for_t0###is the results for original dataset####
   effects_for_t0=cbind(results_t0[,(ncol(bootstrap_data)-1)],effects_for_t0,indirect_vander_t0,direct_vander_t0)
   colnames(effects_for_t0) <- c("event_time", "indirect_t0", "direct_t0", "indirect_vander_t0", "direct_vander_t0")
 
+   ###effects_for_t is the results for bootstrap dataset######
   effects_for_t=cbind(restructure_t[,(ncol(bootstrap_data)-1)],effects_for_t,indirect_vander_t,direct_vander_t)
   colnames(effects_for_t) <- c("event_time", "indirect_t", "direct_t", "indirect_vander_t", "direct_vander_t")
 
 
   effects_for_t0=data.frame(effects_for_t0)
   effects_for_t=data.frame(effects_for_t)
+
+
+  #####plot the results from bootstrap. It contains the mean of estimates of natural indirect and direct effects,and confidence intervals
+  ###compared with VanderWeele's method###
 
   effects_for_t_cl=effects_for_t %>%
     group_by(event_time) %>%
@@ -372,35 +395,19 @@ set.seed(seed)
 }
 
 
-# results_t0=results$t0
-# results_t=data.frame(results_t)
-# results_t0=data.frame(matrix(results_t0,nrow=1))
-#
-# colnames(results_t)=c(paste0("theta_",colnames(mediation_hui1)[1]),
-#                       paste0("theta_",colnames(mediation_hui1)[2]),
-#                       paste0("theta_",colnames(mediation_hui1)[1],"_",colnames(mediation_hui1)[2]),
-#                       paste0("theta_",colnames(mediation_hui1)[3:(ncol(mediation_hui1)-2)]),
-#                       paste0("beta_","intercept"),
-#                       paste0("beta_",colnames(mediation_hui1)[1]),
-#                       paste0("beta_",colnames(mediation_hui1)[3:(ncol(mediation_hui1)-2)]),
-#                       paste0(colnames(mediation_hui1)[2],"_sd"))
-#
-# colnames(results_t0)=c(paste0("theta_",colnames(mediation_hui1)[1]),
-#                        paste0("theta_",colnames(mediation_hui1)[2]),
-#                        paste0("theta_",colnames(mediation_hui1)[1],"_",colnames(mediation_hui1)[2]),
-#                        paste0("theta_",colnames(mediation_hui1)[3:(ncol(mediation_hui1)-2)]),
-#                        paste0("beta_","intercept"),
-#                        paste0("beta_",colnames(mediation_hui1)[1]),
-#                        paste0("beta_",colnames(mediation_hui1)[3:(ncol(mediation_hui1)-2)]),
-#                        paste0(colnames(mediation_hui1)[2],"_sd"))
+####The end of the big function####
+###the result is a list contain:
+
+#1. The estimate of natural indirect and direct effects from original dataset
+#from 1 to the last event time.
+#2. The plot of natural indirect with mean and confidence interval from our approach
+#compared with VanderWeele' estimate
+#3.The plot of natural direct with mean and confidence interval from our approach
+#compared with VanderWeele' estimate
 
 
-bootstrap_results=one_mediator_bootstrap(mediation_hui1,500)
-end_time <- Sys.time()
+##run the big function with example data to get the results##
+bootstrap_results=one_mediator_bootstrap(example_data,500)
 
-bbbb=end_time - start_time
-bbbb
 
-# results_t
-#
-# results_t0
+
